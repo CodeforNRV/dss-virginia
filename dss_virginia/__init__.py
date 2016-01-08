@@ -9,9 +9,10 @@ loc_url = lambda loc_id: "https://www.dss.virginia.gov/facility/search/cc.cgi?rm
 insp_url = lambda inspection_id, loc_id: "https://www.dss.virginia.gov/facility/search/cc.cgi?rm=Inspection;Inspection={inspection_id};ID={loc_id}".format(inspection_id=inspection_id, loc_id=loc_id)
 
 http = urllib3.PoolManager(
-    cert_reqs='CERT_REQUIRED', # Force certificate check.
+    cert_reqs='CERT_REQUIRED',  # Force certificate check.
     ca_certs=certifi.where(),  # Path to the Certifi bundle.
 )
+
 
 def get_page(url):
     '''Get all of our page data in a consistent fashion'''
@@ -20,9 +21,11 @@ def get_page(url):
     # lxml is much better than stock python parser
     return BeautifulSoup(r.data, 'lxml')
 
+
 def get_key(tag):
     '''a lot of time we will need to extract a key from a tag'''
-    return tag.get_text().strip().strip(':').lower().replace(' ', '_').encode('ascii','ignore')
+    return tag.get_text().strip().strip(':').lower().replace(' ', '_').encode('ascii', 'ignore')
+
 
 def get_loc_ids(start_num=1):
     '''Location id Generator function.
@@ -44,6 +47,7 @@ def get_loc_ids(start_num=1):
         if start_num >= num_locs:
             done = True
 
+
 def parse_loc(loc_id):
     '''Fetch detailed info for a single location based on id'''
 
@@ -59,8 +63,8 @@ def parse_loc(loc_id):
     # big breakdowns go by tables
     basic_info, additional_info, inspection_info = soup.find_all('table')[:3]
 
-    #first table has a bunch of data in fairly unstructured format
-    name_and_address, city_zip, phone_number  = basic_info.find_all('tr')
+    # first table has a bunch of data in fairly unstructured format
+    name_and_address, city_zip, phone_number = basic_info.find_all('tr')
     parsed_name_address = [line.strip() for line in name_and_address.get_text().split('\n') if line.strip()]
     location_info.update({
         'name': parsed_name_address[0],
@@ -80,7 +84,7 @@ def parse_loc(loc_id):
     # there are a lot of additional info that follows the general format of <td>key</td><td>value</td>
     # but some need some extra parsing
     extra_parsing = {
-        'ages': lambda ages: ages.replace('\t','').replace('\n',''),
+        'ages': lambda ages: ages.replace('\t', '').replace('\n', ''),
         'inspector': lambda inspector_info: [line.strip() for line in inspector_info.split('\n') if line.strip()]
     }
     for row in additional_info.find_all('tr')[:-1]:
@@ -103,6 +107,7 @@ def parse_loc(loc_id):
     location_info['inspections'] = [parse_inspection(insp_id, loc_id) for insp_id in inspection_ids]
 
     return location_info
+
 
 def parse_inspection(insp_id, loc_id):
     '''To get inspection data, you need to give the site both the inspection id and location id'''
@@ -129,9 +134,9 @@ def parse_inspection(insp_id, loc_id):
 
         parsers = {
             'standard_#': lambda val: val.strip(),
-            'description': lambda val: val.strip().replace('\r','\n'),
+            'description': lambda val: val.strip().replace('\r', '\n'),
             'complaint_related': lambda val: val.strip(),
-            'action_to_be_taken': lambda val: val.strip().replace('\r','\n')
+            'action_to_be_taken': lambda val: val.strip().replace('\r', '\n')
         }
         line_num = 0
         violation_lines = violations.find_all('tr')
@@ -150,7 +155,7 @@ def parse_inspection(insp_id, loc_id):
 
             else:
                 raw_key, val = violation_lines[line_num].get_text().split(':', 1)
-                key = raw_key.strip().strip(':').lower().replace(' ', '_').encode('ascii','ignore')
+                key = raw_key.strip().strip(':').lower().replace(' ', '_').encode('ascii', 'ignore')
                 violation_info[key] = parsers[key](val)
 
             line_num += 1
@@ -160,7 +165,7 @@ def parse_inspection(insp_id, loc_id):
     parsers = {
         'areas_reviewed': lambda areas_reviewed: [areas_reviewed.br.previousSibling.strip()] + [foo.nextSibling.strip() for foo in areas_reviewed.find_all('br')],
         'technical_assistance': lambda technical_assistance: technical_assistance.get_text().strip(),
-        'comments': lambda comments: comments.get_text().strip().replace('\r','\n'),
+        'comments': lambda comments: comments.get_text().strip().replace('\r', '\n'),
         'violations': parse_violations
     }
 
