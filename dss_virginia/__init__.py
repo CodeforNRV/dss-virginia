@@ -2,6 +2,7 @@ import urllib3
 import certifi
 from bs4 import BeautifulSoup
 import re
+import geopy
 
 # a few handy url generator funcitons
 base_url = lambda start_num=1: "https://www.dss.virginia.gov/facility/search/cc.cgi?rm=Search;search_require_client_code-2106=1;search_require_client_code-2105=1;search_require_client_code-2102=1;search_require_client_code-2104=1;search_require_client_code-2201=1;search_require_client_code-2101=1;Start={start_num}".format(start_num=start_num)
@@ -51,6 +52,9 @@ def get_loc_ids(start_num=1):
 def parse_loc(loc_id):
     '''Fetch detailed info for a single location based on id'''
 
+    # Define geolocator from GooglemapsV3 api :: no key required :: output projection EPSG:3857 Spherical Mercator (Web Mercator)
+    geolocator = geopy.geocoders.GoogleV3(domain='maps.googleapis.com')
+
     print "Fetching info for location id =", loc_id
 
     soup = get_page(loc_url(loc_id))
@@ -74,12 +78,23 @@ def parse_loc(loc_id):
     city, state_zip = city_zip.get_text().split(',')
     state, zip_code = state_zip.split()
 
+    # Get address for geolocator with city, state and without \n
+    gcode_address = ' '.join([' '.join(parsed_name_address[1:]), city.strip(), state])
+
+    # geolocate
+    location = geolocator.geocode(gcode_address)
+
+    # update location info with lat lon and full mapped address
     location_info.update({
         'city': city.strip(),
         'state': state,
         'zip_code': zip_code,
-        'phone_number': phone_number.get_text().strip()
+        'phone_number': phone_number.get_text().strip(),
+        'mapped_address': location.address,
+        'latitude': location.latitude,
+        'longitude': location.longitude
     })
+    # end update
 
     # there are a lot of additional info that follows the general format of <td>key</td><td>value</td>
     # but some need some extra parsing
@@ -176,3 +191,5 @@ def parse_inspection(insp_id, loc_id):
         inspection_info[key] = parsers[key](tag)
 
     return inspection_info
+
+
