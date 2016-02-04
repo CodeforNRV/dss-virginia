@@ -1,3 +1,5 @@
 certifi==2015.11.20.1
 lxml==3.5.0
 beautifulsoup4==4.4.1
+openpyxl==2.3.3
+geopy==1.11.0
