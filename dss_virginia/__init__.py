@@ -3,6 +3,7 @@ import certifi
 from bs4 import BeautifulSoup
 import re
 import geopy
+import json
 
 # a few handy url generator funcitons
 base_url = lambda start_num=1: "https://www.dss.virginia.gov/facility/search/cc.cgi?rm=Search;search_require_client_code-2106=1;search_require_client_code-2105=1;search_require_client_code-2102=1;search_require_client_code-2104=1;search_require_client_code-2201=1;search_require_client_code-2101=1;Start={start_num}".format(start_num=start_num)
@@ -192,4 +193,17 @@ def parse_inspection(insp_id, loc_id):
 
     return inspection_info
 
+# function returns census fip for given lat / lon
+# not run: define example lat/lons
+#latlon = [[37.23546234, -81.492883], [37.09529495, -81.59387503], [38.763819, -77.44133099999999]]
 
+# Inputs list of latlon pairs, outputs full FIPS census code
+def get_fips(latlon):
+    fips = []
+    http = urllib3.PoolManager()
+    for i in range(0,len(latlon)):
+        url = 'http://www.data.fcc.gov/api/block/find?format=json&latitude={lat}&longitude={lon}'.format(lat=latlon[i][0], lon=latlon[i][1])
+        resp = http.request('GET', url)
+        add = json.loads(resp.data.decode('utf8'))
+        fips.append(add['Block']['FIPS'])
+    return(fips)
