@@ -1,8 +1,10 @@
 import urllib3
 import certifi
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, element
 import re
 import geopy
+import openpyxl
+import pickle
 
 # a few handy url generator funcitons
 base_url = lambda start_num=1: "https://www.dss.virginia.gov/facility/search/cc.cgi?rm=Search;search_require_client_code-2106=1;search_require_client_code-2105=1;search_require_client_code-2102=1;search_require_client_code-2104=1;search_require_client_code-2201=1;search_require_client_code-2101=1;Start={start_num}".format(start_num=start_num)
@@ -13,6 +15,9 @@ http = urllib3.PoolManager(
     cert_reqs='CERT_REQUIRED',  # Force certificate check.
     ca_certs=certifi.where(),  # Path to the Certifi bundle.
 )
+
+# Define geolocator from GooglemapsV3 api :: no key required :: output projection EPSG:3857 Spherical Mercator (Web Mercator)
+geolocator = geopy.geocoders.GoogleV3(domain='maps.googleapis.com')
 
 
 def get_page(url):
@@ -30,7 +35,7 @@ def get_key(tag):
 
 def get_loc_ids(start_num=1):
     '''Location id Generator function.
-    This will automatically handeling paging of main id lookup, but you can skip ahead by passing in an in representing the ids place in global list, 1 based index'''
+    This will automatically handeling paging of main id lookup, but you can skip ahead by passing in a number representing the ids place in global list, 1 based index'''
 
     done = False
     while not done:
@@ -52,9 +57,6 @@ def get_loc_ids(start_num=1):
 def parse_loc(loc_id):
     '''Fetch detailed info for a single location based on id'''
 
-    # Define geolocator from GooglemapsV3 api :: no key required :: output projection EPSG:3857 Spherical Mercator (Web Mercator)
-    geolocator = geopy.geocoders.GoogleV3(domain='maps.googleapis.com')
-
     print "Fetching info for location id =", loc_id
 
     soup = get_page(loc_url(loc_id))
@@ -69,32 +71,33 @@ def parse_loc(loc_id):
 
     # first table has a bunch of data in fairly unstructured format
     name_and_address, city_zip, phone_number = basic_info.find_all('tr')
-    parsed_name_address = [line.strip() for line in name_and_address.get_text().split('\n') if line.strip()]
+
     location_info.update({
-        'name': parsed_name_address[0],
-        'street_address': '\n'.join(parsed_name_address[1:])
+        'phone_number': phone_number.get_text().strip()
     })
 
-    city, state_zip = city_zip.get_text().split(',')
-    state, zip_code = state_zip.split()
+    parsed_name_address = [line.strip() for line in name_and_address.get_text().split('\n') if line.strip()]
+    location_info.update({
+        'name': parsed_name_address[0]
+    })
 
     # Get address for geolocator with city, state and without \n
-    gcode_address = ' '.join([' '.join(parsed_name_address[1:]), city.strip(), state])
+    gcode_address = ' '.join([' '.join(parsed_name_address[1:]), city_zip.get_text().strip()])
 
     # geolocate
     location = geolocator.geocode(gcode_address)
 
-    # update location info with lat lon and full mapped address
-    location_info.update({
-        'city': city.strip(),
-        'state': state,
-        'zip_code': zip_code,
-        'phone_number': phone_number.get_text().strip(),
-        'mapped_address': location.address,
-        'latitude': location.latitude,
-        'longitude': location.longitude
-    })
-    # end update
+    if location:
+        # update location info with lat lon and full mapped address
+        location_info.update({
+            'address': location.address,
+            'latitude': location.latitude,
+            'longitude': location.longitude,
+            'locality': next((comp['long_name'] for comp in location.raw['address_components'] if 'locality' in comp['types']), None)
+        })
+        # end update
+    else:
+        location_info.update({'raw_address': gcode_address})
 
     # there are a lot of additional info that follows the general format of <td>key</td><td>value</td>
     # but some need some extra parsing
@@ -117,9 +120,12 @@ def parse_loc(loc_id):
         })
         del location_info['inspector']
 
-    inspection_ids = [int(re.search(';Inspection=(\d{1,6});', tag.a['href']).group(1)) for tag in inspection_info.table.find_all('tr')[1:]]
+    if inspection_info.table:
+        inspection_ids = [int(re.search(';Inspection=(\d{1,6});', tag.a['href']).group(1)) for tag in inspection_info.table.find_all('tr')[1:]]
+        location_info['inspections'] = [parse_inspection(insp_id, loc_id) for insp_id in inspection_ids]
 
-    location_info['inspections'] = [parse_inspection(insp_id, loc_id) for insp_id in inspection_ids]
+    else:
+        location_info['inspections'] = []
 
     return location_info
 
@@ -177,8 +183,14 @@ def parse_inspection(insp_id, loc_id):
 
         return violations_info
 
+    def parse_areas_reviewed(areas_reviewed):
+        if areas_reviewed.br:
+            return [areas_reviewed.br.previousSibling.strip()] + [foo.nextSibling.strip() for foo in areas_reviewed.find_all('br') if isinstance(foo.nextSibling, element.NavigableString)]
+
+        return [areas_reviewed.td.text.strip()]
+
     parsers = {
-        'areas_reviewed': lambda areas_reviewed: [areas_reviewed.br.previousSibling.strip()] + [foo.nextSibling.strip() for foo in areas_reviewed.find_all('br')],
+        'areas_reviewed': parse_areas_reviewed,
         'technical_assistance': lambda technical_assistance: technical_assistance.get_text().strip(),
         'comments': lambda comments: comments.get_text().strip().replace('\r', '\n'),
         'violations': parse_violations
@@ -193,3 +205,42 @@ def parse_inspection(insp_id, loc_id):
     return inspection_info
 
 
+def dump_locs(loc_array, file_name='dss_virginia.xlsx'):
+    loc_field_order = ['id', 'name', 'facility_type', 'license_type', 'capacity', 'ages', 'address', 'phone_number']
+
+    wb = openpyxl.Workbook()
+
+    loc_ws = wb.create_sheet(0)
+    loc_ws.title = 'Location Information'
+
+    for c, field in enumerate(loc_field_order):
+        loc_ws.cell(row=1, column=c + 1).value = field
+
+    for i, loc_info in enumerate(loc_array):
+        for c, field in enumerate(loc_field_order):
+            loc_ws.cell(row=i + 2, column=c + 1).value = loc_info[field]
+
+    wb.save(file_name)
+
+if __name__ == '__main__':
+
+    with open('loc_info.pickle', 'rb') as fp:
+        loc_infos = pickle.load(fp)
+
+    print 'Loaded {} locations'.format(len(loc_infos))
+
+    # loc_infos = {}
+    err_locs = []
+    for loc_id in get_loc_ids():
+        if loc_id not in loc_infos:
+            try:
+                loc_info = parse_loc(loc_id)
+                loc_infos[loc_id] = loc_info
+            except:
+                print 'Failed to parse location id: ', loc_id
+                err_locs.append(loc_id)
+
+    print '{} locations found'.format(len(loc_infos))
+
+    with open('loc_info.pickle', 'wb') as fp:
+        pickle.dump(loc_infos, fp)
