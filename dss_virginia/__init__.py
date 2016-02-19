@@ -5,6 +5,7 @@ import re
 import geopy
 import openpyxl
 import pickle
+import json
 
 # a few handy url generator funcitons
 base_url = lambda start_num=1: "https://www.dss.virginia.gov/facility/search/cc.cgi?rm=Search;search_require_client_code-2106=1;search_require_client_code-2105=1;search_require_client_code-2102=1;search_require_client_code-2104=1;search_require_client_code-2201=1;search_require_client_code-2101=1;Start={start_num}".format(start_num=start_num)
@@ -206,11 +207,11 @@ def parse_inspection(insp_id, loc_id):
 
 
 def dump_locs(loc_array, file_name='dss_virginia.xlsx'):
-    loc_field_order = ['id', 'name', 'facility_type', 'license_type', 'capacity', 'ages', 'address', 'phone_number']
+    loc_field_order = ['id', 'name', 'facility_type', 'license_type', 'capacity', 'locality', 'ages', 'address', 'phone_number', 'web_link']
 
     wb = openpyxl.Workbook()
 
-    loc_ws = wb.create_sheet(0)
+    loc_ws = wb['Sheet']
     loc_ws.title = 'Location Information'
 
     for c, field in enumerate(loc_field_order):
@@ -218,9 +219,28 @@ def dump_locs(loc_array, file_name='dss_virginia.xlsx'):
 
     for i, loc_info in enumerate(loc_array):
         for c, field in enumerate(loc_field_order):
-            loc_ws.cell(row=i + 2, column=c + 1).value = loc_info[field]
+            if field is not 'web_link':
+                loc_ws.cell(row=i + 2, column=c + 1).value = loc_info.get(field, None)
+            else:
+                loc_ws.cell(row=i + 2, column=c + 1).value = loc_url(loc_info['id'])
 
     wb.save(file_name)
+
+
+def get_fips(latlon):
+    '''# function returns census fip for given lat / lon
+    not run: define example lat/lons
+    latlon = [[37.23546234, -81.492883], [37.09529495, -81.59387503], [38.763819, -77.44133099999999]]
+
+    Inputs list of latlon pairs, outputs full FIPS census code'''
+    fips = []
+    http = urllib3.PoolManager()
+    for i in range(0, len(latlon)):
+        url = 'http://www.data.fcc.gov/api/block/find?format=json&latitude={lat}&longitude={lon}'.format(lat=latlon[i][0], lon=latlon[i][1])
+        resp = http.request('GET', url)
+        add = json.loads(resp.data.decode('utf8'))
+        fips.append(add['Block']['FIPS'])
+    return(fips)
 
 if __name__ == '__main__':
 
