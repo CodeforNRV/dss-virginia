@@ -3,12 +3,9 @@ import certifi
 from bs4 import BeautifulSoup, element
 import re
 import geopy
-<<<<<<< HEAD
 import openpyxl
 import pickle
-=======
 import json
->>>>>>> f56a25fcefe605cd43e6fab248e2d137dfdaa92b
 
 # a few handy url generator funcitons
 base_url = lambda start_num=1: "https://www.dss.virginia.gov/facility/search/cc.cgi?rm=Search;search_require_client_code-2106=1;search_require_client_code-2105=1;search_require_client_code-2102=1;search_require_client_code-2104=1;search_require_client_code-2201=1;search_require_client_code-2101=1;Start={start_num}".format(start_num=start_num)
