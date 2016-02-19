@@ -94,7 +94,8 @@ def parse_loc(loc_id):
             'address': location.address,
             'latitude': location.latitude,
             'longitude': location.longitude,
-            'locality': next((comp['long_name'] for comp in location.raw['address_components'] if 'locality' in comp['types']), None)
+            'locality': next((comp['long_name'] for comp in location.raw['address_components'] if 'locality' in comp['types']), None),
+            'fips': get_fips([location.latitude, location.longitude])[0]
         })
         # end update
     else:
@@ -207,7 +208,7 @@ def parse_inspection(insp_id, loc_id):
 
 
 def dump_locs(loc_array, file_name='dss_virginia.xlsx'):
-    loc_field_order = ['id', 'name', 'facility_type', 'license_type', 'capacity', 'locality', 'ages', 'address', 'phone_number', 'web_link']
+    loc_field_order = ['id', 'name', 'facility_type', 'license_type', 'capacity', 'locality', 'ages', 'address', 'phone_number', 'fips', 'web_link']
 
     wb = openpyxl.Workbook()
 
