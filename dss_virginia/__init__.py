@@ -206,11 +206,11 @@ def parse_inspection(insp_id, loc_id):
 
 
 def dump_locs(loc_array, file_name='dss_virginia.xlsx'):
-    loc_field_order = ['id', 'name', 'facility_type', 'license_type', 'capacity', 'ages', 'address', 'phone_number']
+    loc_field_order = ['id', 'name', 'facility_type', 'license_type', 'capacity', 'locality', 'ages', 'address', 'phone_number', 'web_link']
 
     wb = openpyxl.Workbook()
 
-    loc_ws = wb.create_sheet(0)
+    loc_ws = wb['Sheet']
     loc_ws.title = 'Location Information'
 
     for c, field in enumerate(loc_field_order):
@@ -218,7 +218,10 @@ def dump_locs(loc_array, file_name='dss_virginia.xlsx'):
 
     for i, loc_info in enumerate(loc_array):
         for c, field in enumerate(loc_field_order):
-            loc_ws.cell(row=i + 2, column=c + 1).value = loc_info[field]
+            if field is not 'web_link':
+                loc_ws.cell(row=i + 2, column=c + 1).value = loc_info.get(field, None)
+            else:
+                loc_ws.cell(row=i + 2, column=c + 1).value = loc_url(loc_info['id'])
 
     wb.save(file_name)
 
