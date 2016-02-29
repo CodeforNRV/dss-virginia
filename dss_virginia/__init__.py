@@ -207,7 +207,25 @@ def parse_inspection(insp_id, loc_id):
     return inspection_info
 
 
-def dump_locs(loc_array, file_name='dss_virginia.xlsx'):
+def get_fips(latlon):
+    '''# function returns census fip for given lat / lon
+    not run: define example lat/lons
+    latlon = [[37.23546234, -81.492883], [37.09529495, -81.59387503], [38.763819, -77.44133099999999]]
+
+    Inputs list of latlon pairs, outputs full FIPS census code'''
+    fips = []
+    http = urllib3.PoolManager()
+    for i in range(0, len(latlon)):
+        url = 'http://www.data.fcc.gov/api/block/find?format=json&latitude={lat}&longitude={lon}'.format(lat=latlon[i][0], lon=latlon[i][1])
+        resp = http.request('GET', url)
+        add = json.loads(resp.data.decode('utf8'))
+        fips.append(add['Block']['FIPS'])
+    return(fips)
+
+# Export functions
+
+
+def dump_locs_xslx(loc_array, file_name='dss_virginia.xlsx'):
     loc_field_order = ['id', 'name', 'facility_type', 'license_type', 'capacity', 'locality', 'ages', 'address', 'phone_number', 'fips', 'web_link']
 
     wb = openpyxl.Workbook()
@@ -228,20 +246,85 @@ def dump_locs(loc_array, file_name='dss_virginia.xlsx'):
     wb.save(file_name)
 
 
-def get_fips(latlon):
-    '''# function returns census fip for given lat / lon
-    not run: define example lat/lons
-    latlon = [[37.23546234, -81.492883], [37.09529495, -81.59387503], [38.763819, -77.44133099999999]]
+def dump_locs_csv(loc_array, file_name='dss_virginia.csv'):
+    field_names = [
+        'id',
+        'phone_number',
+        'business_hours',
+        'name',
+        'locality',
+        'inspector_phone',
+        'address',
+        'ages',
+        'administrator',
+        'longitude',
+        'facility_type',
+        'latitude',
+        'expiration_date',
+        'license_type',
+        'capacity',
+        'inspector_name',
+        'fips'
+    ]
+    import csv
+    with open(file_name, 'wb') as csvfile:
+        csv_writer = csv.DictWriter(csvfile, fieldnames=field_names, extrasaction='ignore')
 
-    Inputs list of latlon pairs, outputs full FIPS census code'''
-    fips = []
-    http = urllib3.PoolManager()
-    for i in range(0, len(latlon)):
-        url = 'http://www.data.fcc.gov/api/block/find?format=json&latitude={lat}&longitude={lon}'.format(lat=latlon[i][0], lon=latlon[i][1])
-        resp = http.request('GET', url)
-        add = json.loads(resp.data.decode('utf8'))
-        fips.append(add['Block']['FIPS'])
-    return(fips)
+        csv_writer.writeheader()
+
+        for loc in loc_array:
+            csv_writer.writerow(loc)
+
+# SQLalchemy classes
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy import Column, Integer, String
+
+Base = declarative_base()
+
+
+class Location(Base):
+    __tablename__ = 'childcare_locations'
+
+    id = Column(Integer, primary_key=True)
+
+    name = Column(String)
+    phone_number = Column(String)
+    business_hours = Column(String)
+    locality = Column(String)
+    inspector_phone = Column(String)
+    address = Column(String)
+    ages = Column(String)
+    administrator = Column(String)
+    facility_type = Column(String)
+    expiration_date = Column(String)
+    license_type = Column(String)
+    capacity = Column(String)
+    inspector_name = Column(String)
+
+    longitude = Column(Integer)
+    latitude = Column(Integer)
+    fips = Column(Integer)
+
+    def __repr__(self):
+        return '<Location(id={id}, name="{name}")>'.format(id=self.id, name=self.name)
+
+# sql user and pass required for this code
+# from sqlalchemy import create_engine
+# from sqlalchemy.engine import reflection
+# from sqlalchemy.orm import sessionmaker
+
+# engine = create_engine('postgresql://{sql_user}:{sql_pass}@database.codefornrv.org'.format(sql_user=sql_user, sql_pass=sql_pass), echo=True)
+# Session = sessionmaker(bind=engine)
+# insp = reflection.Inspector.from_engine(engine)
+# insp.get_schema_names()
+
+
+def load_loc_sql(loc):
+    sql_info = {}
+    for c in Location.__table__.columns:
+        sql_info[c.name] = loc.get(c.name)
+
+    return Location(**sql_info)
 
 if __name__ == '__main__':
 
@@ -265,3 +348,10 @@ if __name__ == '__main__':
 
     with open('loc_info.pickle', 'wb') as fp:
         pickle.dump(loc_infos, fp)
+
+    # sql user and pass required for this code
+    # session = Session()
+    # for loc in loc_infos.values():
+    #     session.add(load_loc_sql(loc))
+
+    # session.commit()
