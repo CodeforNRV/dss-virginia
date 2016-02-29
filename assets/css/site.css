@@ -24,7 +24,7 @@ a {
     display: flex;
     justify-content: space-between; }
 
-.map-container {
+#map-container {
   position: absolute;
   top: 75px;
   left: 0;
@@ -32,9 +32,12 @@ a {
   height: 650px;
   background-color: beige; }
 
-.search-filters-box {
+#search-filters-box {
   background-color: #FFF;
-  position: absolute; }
+  position: absolute;
+  top: 10em;
+  padding: 10px;
+}
 
 footer {
   background-color: #005B06;
