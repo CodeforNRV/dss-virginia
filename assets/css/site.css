@@ -39,12 +39,33 @@ a {
   padding: 10px;
 }
 
+#legend-box {
+  background-color: #FFF;
+  position: absolute;
+  top: 30em;
+  padding-left: 10px;
+  padding-right: 10px;
+}
+#legend-table {
+
+}
+.legend-entry {
+  width: 30px;
+  height: 10px;
+  border-color: black;
+}
+
 footer {
+  padding: 8px;
   background-color: #005B06;
+  color: #FFF;
   height: 40px;
   position: absolute;
   left: 0;
   width: 100%;
   top: 725px; }
+footer a:hover {
+  color: #FFF;
+}
 
 /*# sourceMappingURL=site.css.map */

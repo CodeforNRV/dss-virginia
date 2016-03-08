@@ -67,3 +67,6 @@ target/
 # our .env file that we use locally, but not the template
 .env*
 !.env.template
+
+# pickled data
+*.pickle
