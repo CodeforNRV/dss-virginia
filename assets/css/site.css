@@ -56,11 +56,16 @@ a {
 }
 
 footer {
+  padding: 8px;
   background-color: #005B06;
+  color: #FFF;
   height: 40px;
   position: absolute;
   left: 0;
   width: 100%;
   top: 725px; }
+footer a:hover {
+  color: #FFF;
+}
 
 /*# sourceMappingURL=site.css.map */
