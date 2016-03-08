@@ -51,6 +51,10 @@
             </label>
           </div>
         </div>
+        <div id="legend-box">
+            <h5>Capacity per<br />1,000 people</h5>
+            <table id="legend-table" class="table table-bordered table-condensed"></table>
+        </div>
       </div>
     </div>
     <footer>
@@ -99,21 +103,69 @@
       });
 
       $(":checkbox").change(function() {
+        var normalizationRange = [];
+        var max = 0;
+        var min = 1000;
+        var features = geojson.features;
+        for (var i = 0; i < features.length; i++) {
+          var countyTotal = 0;
+          $('#search-filters-box input:checked').each(function() {
+            countyTotal += features[i]["properties"][$(this).attr('name')]
+          });
+          var normalized1 = (countyTotal/features[i]["properties"]["total_pop_2015"])*1000. //Gives us the capacity per 1,000 people
+          if (normalized1 < min) { min = normalized1 }
+          if (normalized1 > max) { max = normalized1 }
+        }
+
+        //Now we have the max and min, let's create our scale
+        var range = max - min;
+        if (range < 6) { normalizationRange = [  //We'll just do two colors
+            {number: Math.round(min+range/2), color: '#ffffb2'},
+            {number: Math.ceil(max), color: '#fed976'}
+        ] }
+        else {
+          var scale = Math.round(range/6);
+          min = Math.round(min);
+          normalizationRange = [
+              { number: min+(scale/2), color: '#ffffb2' },
+              { number: min+scale, color: '#fed976' },
+              { number: min+scale*2, color: '#feb24c' },
+              { number: min+scale*3, color: '#fd8d3c' },
+              { number: min+scale*4, color: '#f03b20' },
+              { number: max, color: '#bd0026' }
+          ];
+        }
+
+        //Create the legend
+          console.log(range);
+        $('#legend-table').html('');
+        $('#legend-table').append('<tr><td class="legend-entry" style="background-color:#ffffff"></td><td>None</td></tr>');
+        if(range != 0) {
+            $.each(normalizationRange, function (index, value) {
+                $('#legend-table').append('<tr><td class="legend-entry" style="background-color:' + value["color"] + '"></td><td> < ' + Math.round(value["number"]) + '</td></tr>');
+            })
+        }
+
+        //Now Google will go through each county and set the style
         map.data.setStyle(function(feature) {
           var total = 0;
           var population = feature.getProperty('total_pop_2015');
           $('#search-filters-box input:checked').each(function() {
             total += feature.getProperty($(this).attr('name'));
           });
+          var normalized2 = (total/population)*1000.0;
           var color = '';
-          console.log(total, population, total/population);
-          var normalized = total/population;
-          if (normalized <= 0.005) { color = '#ffffb2' }
-          else if (normalized <= 0.01) { color = '#fed976' }
-          else if (normalized <= 0.02) { color = '#feb24c' }
-          else if (normalized <= 0.03) { color = '#fd8d3c' }
-          else if (normalized <= 0.04) { color = '#f03b20' }
-          else { color = '#bd0026' }
+          if (normalized2 == 0) { color = '#ffffff' }
+          else if (normalizationRange.length == 2) {
+              if (normalized2 < normalizationRange[0]['number']) { color = normalizationRange[0]['color'] }
+              else { color = normalizationRange[1]['color'] }
+          }
+          else if (normalized2 < normalizationRange[0]['number']) { color = normalizationRange[0]['color'] }
+          else if (normalized2 < normalizationRange[1]['number']) { color = normalizationRange[1]['color'] }
+          else if (normalized2 < normalizationRange[2]['number']) { color = normalizationRange[2]['color'] }
+          else if (normalized2 < normalizationRange[3]['number']) { color = normalizationRange[3]['color'] }
+          else if (normalized2 < normalizationRange[4]['number']) { color = normalizationRange[4]['color'] }
+          else { color = normalizationRange[5]['color'] }
 
           return {
             fillColor: color,
